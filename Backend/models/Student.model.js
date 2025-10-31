@@ -6,6 +6,7 @@ const studentSchema = new mongoose.Schema({
   name: { type: String, required: true },
   rollNumber: { type: String, required: true, unique: true },
   division: { type: String, required: true },
+  email:{type:String,require:true},
   embeddings: {
     type: [
       {
@@ -16,7 +17,9 @@ const studentSchema = new mongoose.Schema({
     ],
     default: undefined // make the embeddings array itself optional
   },
-  images: [imageSchema]
+  images: [imageSchema],
+  deptId:{type:mongoose.Types.ObjectId,ref:'Department',required:true},
+  semester:{type:Number,required:true}
 }, { timestamps: true, skipVersioning: true });
 
 export default mongoose.model('Student', studentSchema);
