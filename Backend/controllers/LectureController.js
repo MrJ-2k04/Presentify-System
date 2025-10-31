@@ -96,6 +96,7 @@ const create = async (req, res) => {
         Bucket: AWS_CONFIG.bucketName,
         Key: `lectures/${subjectId}/${lecture.id}/images/${fileName}`,
         Body: file.buffer,
+        ContentType: file.mimetype,
       };
 
       const s3Response = await s3.upload(params).promise();
