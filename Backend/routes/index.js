@@ -7,6 +7,7 @@ import teacherRoutes from "./Teacher.routes.js";
 import subjectRoutes from "./Subject.routes.js";
 import studentRoutes from "./Student.routes.js";
 import lectureRoutes from "./Lecture.routes.js";
+import organisationRoutes from "./Organisation.routes.js";
 
 export default function (app) {
   const router = express.Router();
@@ -18,6 +19,7 @@ export default function (app) {
   router.use("/subject", subjectRoutes);
   router.use("/student", studentRoutes);
   router.use("/lecture", lectureRoutes);
+  router.use("/organisation",organisationRoutes);
 
   // 404 not found
   router.get("/*", (req, res) => res.status(404).json({ type: 'error', message: '404 not found!' }));

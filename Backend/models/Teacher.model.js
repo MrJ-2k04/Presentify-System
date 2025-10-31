@@ -1,5 +1,5 @@
 // models/Teacher.js
-import { required } from 'joi';
+
 import mongoose from 'mongoose';
 
 const teacherSchema = new mongoose.Schema({
