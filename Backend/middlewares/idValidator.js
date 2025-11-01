@@ -6,7 +6,7 @@ import { idSchema } from "../utils/Validators.js";
 function idValidator(req, res, next) {
     const { error } = idSchema.validate({ id: req.params.id });
     if (error) {
-        return ResponseHandler.error(res, 'Invalid Subject ID', 400);
+        return ResponseHandler.error(res, 'Invalid ID', 400);
     }
     next();
 }

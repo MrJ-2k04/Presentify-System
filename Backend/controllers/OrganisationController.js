@@ -1,7 +1,7 @@
 import Joi from "joi";
 import ResponseHandler from "../utils/ResponseHandler.js";
 import { Organisation } from "../models/index.js";
-import { get } from "mongoose";
+
 
 
 
@@ -9,7 +9,12 @@ import { get } from "mongoose";
 
 const create=async(req,res)=>{
     const organisationSchema=Joi.object({
-        name:Joi.string().trim().required(),
+        name:Joi.string()
+            .trim()
+            .min(2)
+            .max(100)
+            .pattern(/^[a-zA-Z\s]+$/)
+            .required(),
         address:Joi.string().trim().required(),
         website:Joi.string().uri().required(),
         contact: Joi.string()
@@ -48,6 +53,13 @@ const create=async(req,res)=>{
 const getAll=async(req,res)=>{
     try{
         const organisations=await Organisation.find();
+        if (!organisations || organisations.length === 0) {
+            return ResponseHandler.success(
+                res,
+                [],
+                "No organisations found"
+            );
+        }
         return ResponseHandler.success(
             res,
             organisations,
