@@ -1,4 +1,4 @@
-import { Subject } from "../models/index.js";
+import { Subject,Department,Teacher } from "../models/index.js";
 import ResponseHandler from "../utils/ResponseHandler.js";
 import Joi from "joi";
 
@@ -7,7 +7,9 @@ const create = async (req, res) => {
   // Validate request body
   const subjectSchema = Joi.object({
     name: Joi.string().trim().min(2).max(100).required(),
+    deptId:Joi.string().trim().required(),
     teacherId: Joi.string().trim().required(),
+    semester:Joi.number().required()
   });
 
   const { error, value } = subjectSchema.validate(req.body, {
@@ -24,6 +26,15 @@ const create = async (req, res) => {
   const validatedData = value;
 
   try {
+    const department = await Department.findById(validatedData.deptId);
+    if (!department) {
+      return ResponseHandler.notFound(res, "Invalid Department ID");
+    }
+    const teacher = await Teacher.findById(validatedData.teacherId);
+    if (!teacher) {
+      return ResponseHandler.notFound(res, "Invalid Teacher ID");
+    }
+
     const subject = await Subject.create(validatedData);
     return ResponseHandler.success(
       res,
@@ -39,7 +50,7 @@ const create = async (req, res) => {
 // READ ALL
 const getAll = async (req, res) => {
   try {
-    const subjects = await Subject.find().populate("teacherId");
+    const subjects = await Subject.find().populate("teacherId","-password").populate("deptId");
     return ResponseHandler.success(
       res,
       subjects,
@@ -53,7 +64,7 @@ const getAll = async (req, res) => {
 // READ BY ID
 const getById = async (req, res) => {
   try {
-    const subject = await Subject.findById(req.params.id).populate("teacherId");
+    const subject = await Subject.findById(req.params.id).populate("teacherId","-password").populate("deptId");
     if (!subject) {
       return ResponseHandler.notFound(res, "Subject not found");
     }
@@ -70,6 +81,15 @@ const getById = async (req, res) => {
 // UPDATE
 const update = async (req, res) => {
   try {
+    if (req.body.deptId) {
+      return ResponseHandler.badRequest(res, "Department ID cannot be updated");
+    }
+    if (req.body.teacherId) {
+      const teacherExists = await Teacher.findById(req.body.teacherId);
+      if (!teacherExists) {
+        return ResponseHandler.notFound(res, "Invalid Teacher ID");
+      }
+    }
     const subject = await Subject.findByIdAndUpdate(req.params.id, req.body, {
       new: true,
     });
