@@ -39,3 +39,22 @@ def download_from_s3(key: str) -> bytes:
         return response["Body"].read()
     except s3.exceptions.NoSuchKey:
         raise FileNotFoundError(f"S3 object with key '{key}' not found.")
+
+def save_to_local(image_bytes: bytes, filename: str, filepath: str) -> tuple[str, str]:
+    """
+    Saves bytes to a local path (under ./local_storage/) and returns a file URL and key-like path.
+    """
+    base_dir = os.path.join(os.getcwd(), "local_storage")
+    # filepath may be like 'lectures/<sub>/<lec>/annotated_images'
+    key_path = os.path.join(filepath.replace("/", os.sep), filename)
+    full_path = os.path.join(base_dir, key_path)
+
+    dir_path = os.path.dirname(full_path)
+    os.makedirs(dir_path, exist_ok=True)
+
+    with open(full_path, "wb") as f:
+        f.write(image_bytes)
+
+    file_url = f"file://{full_path}"
+    # Return a key-like path consistent with S3 key semantics
+    return file_url, key_path.replace(os.sep, "/")

@@ -3,17 +3,21 @@ import json
 import cv2
 import numpy as np
 from insightface.app import FaceAnalysis
+import time
 
 # Paths
-DATASET_DIR = "student_images" # other: "temp_student_images"
-TEST_DIR = "lecture_images" # other: "temp_lecture_images"
-OUTPUT_DIR = "annotated_images"
-DB_PATH = "db.json"
+DATASET_DIR = "data/student_images" # other: "temp_student_images"
+TEST_DIR = "data/lecture_images" # other: "temp_lecture_images"
+OUTPUT_DIR = "data/annotated_images"
+DB_PATH = "data/db_buffalo_s.json"
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # Initialize InsightFace
-app = FaceAnalysis(name="buffalo_l", providers=['CUDAExecutionProvider', 'CPUExecutionProvider'])
+app = FaceAnalysis(name="buffalo_s", providers=[
+    'CUDAExecutionProvider',
+    'CPUExecutionProvider'
+])
 app.prepare(ctx_id=0, det_size=(640, 640))
 
 # ------------------------
@@ -34,7 +38,7 @@ for file in os.listdir(DATASET_DIR):
 
     # Skip if already in DB
     if student_id in db:
-        print(f"[SKIP] {student_id} already in DB")
+        # print(f"[SKIP] {student_id} already in DB")
         continue
 
     path = os.path.join(DATASET_DIR, file)
@@ -62,6 +66,7 @@ print(f"\n✅ Database updated and stored in {DB_PATH}")
 # ------------------------
 # Step 2: Compare with test_data
 # ------------------------
+start_time = time.time()
 with open(DB_PATH, "r") as f:
     db = json.load(f)
 
@@ -72,7 +77,8 @@ def cosine_similarity(a, b):
 results = {}
 THRESHOLD = 0.35
 
-for file in os.listdir(TEST_DIR):
+for file in sorted(os.listdir(TEST_DIR)):
+    file_start_time = time.time()
     path = os.path.join(TEST_DIR, file)
     img = cv2.imread(path)
     if img is None:
@@ -113,7 +119,11 @@ for file in os.listdir(TEST_DIR):
     # Save annotated image
     out_path = os.path.join(OUTPUT_DIR, file)
     cv2.imwrite(out_path, img)
+    file_end_time = time.time()
+    print(f"Processed {file} in {file_end_time - file_start_time:.2f} seconds")
 
+end_time = time.time()
+print(f"Step 2 took {end_time - start_time:.2f} seconds to run.")
 
 # ------------------------
 # Step 3: Save results

@@ -1,6 +1,6 @@
 
 __pycache__
-student_images/
-temp_*_images/
+*_images
+testing
 .env*
 cuda-keyring_1.1-1_all.deb
