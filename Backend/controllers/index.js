@@ -1,17 +1,19 @@
 
 
 
-import teacherController from './TeacherController.js';
-import subjectController from './SubjectController.js';
-import studentController from './StudentController.js';
+import authController from './AuthController.js';
+import userController from './UserController.js';
+import departmentController from './DepartmentController.js';
 import lectureController from './LectureController.js';
 import organisationController from './OrganisationController.js';
-import departmentController from './DepartmentController.js';
+import studentController from './StudentController.js';
+import subjectController from './SubjectController.js';
 export {
-    teacherController,
-    subjectController,
-    studentController,
+    authController,
+    departmentController,
     lectureController,
     organisationController,
-    departmentController
+    studentController,
+    subjectController,
+    userController
 };

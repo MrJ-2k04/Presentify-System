@@ -11,7 +11,7 @@ class ResponseHandler {
     if (typeof error === 'string') {
       error = new Error(error);
     }
-    
+
     return res.status(statusCode).json({
       type: 'error',
       message: error.message || 'Something went wrong',
@@ -37,6 +37,20 @@ class ResponseHandler {
     return res.status(408).json({
       type: 'error',
       message,
+    });
+  }
+
+  static unauthorized(res, message = 'Unauthorized') {
+    return res.status(401).json({
+      type: 'error',
+      message
+    });
+  }
+
+  static forbidden(res, message = 'Forbidden') {
+    return res.status(403).json({
+      type: 'error',
+      message
     });
   }
 }

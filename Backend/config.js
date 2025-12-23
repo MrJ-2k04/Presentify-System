@@ -1,7 +1,9 @@
 
+import { ENVIRONMENTS } from './utils/constants.js';
+
 // ################################################### CONSTANTS ###################################################
 
-const APP_PORT = process.env.NODE_ENV === 'production' ? 80 : 8080;
+const APP_PORT = process.env.NODE_ENV === ENVIRONMENTS.PRODUCTION ? 80 : 8080;
 const DB_CONNECTION_URL = process.env.MONGODB_URL || 'mongodb://localhost:27017/AI_Attendance_System';
 const AWS_CONFIG = {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID,

@@ -7,7 +7,8 @@ const lectureSchema = new mongoose.Schema({
   division: { type: String, required: true },
   attendance: [presentStudentSchema],
   images: [imageSchema],
-  annotatedImages: [imageSchema]
+  annotatedImages: [imageSchema],
+  batch: { type: String } // If present, attendance is only for this batch
 }, { timestamps: true, skipVersioning: true });
 
 export default mongoose.model('Lecture', lectureSchema);
