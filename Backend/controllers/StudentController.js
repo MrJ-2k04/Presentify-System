@@ -2,7 +2,7 @@ import AWS from "aws-sdk";
 import Joi from "joi";
 import path from "path";
 import { AWS_CONFIG } from "../config.js";
-import { Student, Department } from "../models/index.js";
+import { Student, Department, Subject } from "../models/index.js";
 import { generateEmbeddings } from "../services/index.js";
 import ResponseHandler from "../utils/ResponseHandler.js";
 import { ROLES } from "../utils/constants.js";
@@ -392,4 +392,46 @@ const promoteStudents = async (req, res) => {
   }
 }
 
-export default { create, getAll, getById, update, remove, removeAll, promoteStudents };
+// GET OPTIONS (Divisions/Batches)
+const getOptions = async (req, res) => {
+  try {
+    const { division, departmentId: queryDeptId, subjectId } = req.query;
+
+    let departmentId = queryDeptId || req.user.departmentId;
+
+    if (departmentId === 'null' || departmentId === 'undefined') departmentId = null;
+
+    if (subjectId && subjectId !== 'null' && subjectId !== 'undefined') {
+      const subject = await Subject.findById(subjectId);
+      if (subject) {
+        departmentId = subject.deptId;
+      }
+    }
+
+    if (!departmentId) {
+      return ResponseHandler.badRequest(res, "Department ID not found (provide valid subjectId or departmentId)");
+    }
+
+    if (division) {
+      // Get unique batches for this division
+      const batches = await Student.distinct("batch", {
+        deptId: departmentId,
+        division: division,
+        isAlumni: false,
+        batch: { $ne: null, $exists: true }
+      });
+      return ResponseHandler.success(res, batches, "Batches retrieved successfully");
+    } else {
+      // Get unique divisions for this department
+      const divisions = await Student.distinct("division", {
+        deptId: departmentId,
+        isAlumni: false
+      });
+      return ResponseHandler.success(res, divisions, "Divisions retrieved successfully");
+    }
+  } catch (err) {
+    return ResponseHandler.error(res, err);
+  }
+};
+
+export default { create, getAll, getById, update, remove, removeAll, promoteStudents, getOptions };

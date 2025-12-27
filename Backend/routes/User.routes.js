@@ -15,7 +15,7 @@ router.get('/', userController.getAll);
 router.get('/:id', idValidator, userController.getById);
 
 // Update/Delete restricted
-router.put('/:id', idValidator, authorizeRoles(ROLES.SYSTEM_ADMIN, ROLES.ORG_ADMIN, ROLES.DEPT_ADMIN), userController.update);
+router.put('/:id', idValidator, authorizeRoles(ROLES.SYSTEM_ADMIN, ROLES.ORG_ADMIN, ROLES.DEPT_ADMIN, ROLES.FACULTY), userController.update);
 router.delete('/:id', idValidator, authorizeRoles(ROLES.SYSTEM_ADMIN, ROLES.ORG_ADMIN, ROLES.DEPT_ADMIN), userController.remove);
 
 export default router;

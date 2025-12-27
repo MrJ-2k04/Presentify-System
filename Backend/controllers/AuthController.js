@@ -8,7 +8,7 @@ const login = async (req, res) => {
     const { email, password, platform } = req.body; // Added platform check placeholder
 
     try {
-        const user = await User.findOne({ email });
+        const user = await User.findOne({ email }).populate('organisationId').populate('departmentId');
         if (!user) {
             return ResponseHandler.unauthorized(res, "Invalid credentials");
         }

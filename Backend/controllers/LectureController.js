@@ -2,9 +2,10 @@ import AWS from "aws-sdk";
 import Joi from "joi";
 import path from "path";
 import { AWS_CONFIG } from "../config.js";
-import { Lecture, Student } from "../models/index.js";
+import { Lecture, Student, Subject } from "../models/index.js";
 import { verifyAttendance } from "../services/index.js";
 import ResponseHandler from "../utils/ResponseHandler.js";
+import { ROLES } from "../utils/constants.js";
 import fs from "fs";
 
 // Configure AWS S3
@@ -42,6 +43,7 @@ const create = async (req, res) => {
       )
       .optional()
       .default([]),
+    batch: Joi.string().trim().optional(),
   });
 
   const { error, value } = lectureSchema.validate(req.body, {
@@ -89,6 +91,12 @@ const create = async (req, res) => {
     lecture = await Lecture.create(value);
     const subjectId = value.subjectId;
 
+    // Get subject to know the correct department
+    const subject = await Subject.findById(subjectId);
+    if (!subject) {
+      return ResponseHandler.notFound(res, "Subject not found");
+    }
+
     for (const file of req.files) {
       const extension = path.extname(file.originalname).toLowerCase();
       const fileName = `${Date.now()}${extension}`;
@@ -115,11 +123,17 @@ const create = async (req, res) => {
     }
     lecture.images = uploadedImages;
 
-    // Get student embeddings
+    // Get student embeddings scoped to the subject's department
+    const studentQuery = {
+      division: value.division,
+      deptId: subject.deptId
+    };
+    if (value.batch) {
+      studentQuery.batch = value.batch;
+    }
+
     const studentEmbeddings = await Student.find(
-      {
-        division: value.division,
-      },
+      studentQuery,
       { embeddings: 1, rollNumber: 1 }
     );
 
@@ -203,9 +217,38 @@ const create = async (req, res) => {
 // READ ALL
 const getAll = async (req, res) => {
   try {
-    const lectures = await Lecture.find()
-      .populate({ path: "subjectId" })
-      .populate({ path: "attendance.studentId", strictPopulate: false });
+    let query = {};
+
+    // Role-based filtering
+    if (req.user.role === ROLES.DEPT_ADMIN) {
+      // Find subjects in their department
+      const subjects = await Subject.find({ deptId: req.user.departmentId }).select('_id');
+      const subjectIds = subjects.map(s => s._id);
+      query.subjectId = { $in: subjectIds };
+    } else if (req.user.role === ROLES.FACULTY) {
+      // Find subjects assigned to this faculty
+      const subjects = await Subject.find({ faculties: req.user.userId }).select('_id');
+      const subjectIds = subjects.map(s => s._id);
+      query.subjectId = { $in: subjectIds };
+    }
+
+    // Optional Query Filters
+    if (req.query.subjectId) {
+      query.subjectId = req.query.subjectId;
+    }
+
+    if (req.query.date) {
+      const startOfDay = new Date(req.query.date);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(req.query.date);
+      endOfDay.setHours(23, 59, 59, 999);
+      query.createdAt = { $gte: startOfDay, $lte: endOfDay };
+    }
+
+    const lectures = await Lecture.find(query)
+      .populate({ path: "subjectId", populate: { path: "deptId", select: "name" } })
+      .sort({ createdAt: -1 });
+
     return ResponseHandler.success(
       res,
       lectures,

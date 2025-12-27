@@ -12,7 +12,7 @@ const create = async (req, res) => {
     password: Joi.string().min(6).required(),
     role: Joi.string().valid(...USER_ROLES_ARRAY).required(),
     organisationId: Joi.string().hex().length(24).when('role', { is: ROLES.SYSTEM_ADMIN, then: Joi.optional(), otherwise: Joi.required() }),
-    departmentId: Joi.string().hex().length(24).when('role', { is: Joi.valid(ROLES.DEPT_ADMIN, ROLES.FACULTY), then: Joi.required(), otherwise: Joi.optional() }),
+    departmentId: Joi.string().hex().length(24).when('role', { is: ROLES.DEPT_ADMIN, then: Joi.required(), otherwise: Joi.optional() }),
   });
 
   const { error, value } = userSchema.validate(req.body, { abortEarly: false, stripUnknown: true });
@@ -91,7 +91,11 @@ const getAll = async (req, res) => {
     if (req.user.role === ROLES.ORG_ADMIN) {
       query.organisationId = req.user.organisationId;
     } else if (req.user.role === ROLES.DEPT_ADMIN) {
-      query.departmentId = req.user.departmentId;
+      // Dept Admin sees their own department's users AND all Faculty in the Organisation for assignment
+      query.$or = [
+        { departmentId: req.user.departmentId },
+        { organisationId: req.user.organisationId, role: ROLES.FACULTY }
+      ];
     }
     // System Admin sees all
 
@@ -108,8 +112,25 @@ const getAll = async (req, res) => {
 // GET BY ID
 const getById = async (req, res) => {
   try {
-    const user = await User.findById(req.params.id).select('-password');
+    let user = await User.findById(req.params.id)
+      .populate('organisationId', 'name')
+      .populate('departmentId', 'name')
+      .select('-password')
+      .lean(); // Use lean for easier modification
+
     if (!user) return ResponseHandler.notFound(res, "User not found");
+
+    // If faculty, dynamically fetch their departments from subjects
+    if (user.role === ROLES.FACULTY) {
+      const Subject = (await import('../models/index.js')).Subject;
+      const subjects = await Subject.find({ faculties: user._id })
+        .populate('deptId', 'name')
+        .lean();
+
+      const departments = [...new Set(subjects.map(s => s.deptId).filter(d => d).map(d => JSON.stringify(d)))].map(d => JSON.parse(d));
+      user.departments = departments;
+    }
+
     return ResponseHandler.success(res, user);
   } catch (err) {
     return ResponseHandler.error(res, err);
@@ -124,7 +145,10 @@ const update = async (req, res) => {
       updates.password = await bcrypt.hash(updates.password, 10);
     }
 
-    const user = await User.findByIdAndUpdate(req.params.id, updates, { new: true }).select('-password');
+    const user = await User.findByIdAndUpdate(req.params.id, updates, { new: true })
+      .populate('organisationId', 'name')
+      .populate('departmentId', 'name')
+      .select('-password');
     if (!user) return ResponseHandler.notFound(res, "User not found");
     return ResponseHandler.success(res, user, "User updated");
   } catch (err) {

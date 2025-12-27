@@ -5,21 +5,23 @@ import { ROLES } from "../utils/constants.js";
 
 // CREATE
 const create = async (req, res) => {
-  // Only DEPT_ADMIN can create subjects
-  if (req.user.role !== ROLES.DEPT_ADMIN) {
-    return ResponseHandler.forbidden(res, "Only Dept Admins can create subjects");
+  // Allow DEPT_ADMIN and ORG_ADMIN
+  if (req.user.role !== ROLES.DEPT_ADMIN && req.user.role !== ROLES.ORG_ADMIN) {
+    return ResponseHandler.forbidden(res, "Only Admins can create subjects");
   }
 
   // Validate request body
   const subjectSchema = Joi.object({
     name: Joi.string().trim().min(2).max(100).required(),
     facultyIds: Joi.array().items(Joi.string().trim().hex().length(24)).min(1).required(), // Array of Faculty IDs
-    semester: Joi.number().required()
+    semester: Joi.number().required(),
+    deptId: Joi.string().hex().length(24).when('$role', { is: ROLES.ORG_ADMIN, then: Joi.required(), otherwise: Joi.optional() })
   });
 
   const { error, value } = subjectSchema.validate(req.body, {
     abortEarly: false,
     stripUnknown: true,
+    context: { role: req.user.role }
   });
 
   if (error) {
@@ -28,16 +30,19 @@ const create = async (req, res) => {
   }
 
   try {
-    const department = await Department.findById(req.user.departmentId);
+    const targetDeptId = req.user.role === ROLES.DEPT_ADMIN ? req.user.departmentId : value.deptId;
+
+    // Verify the department exists and belongs to the user's organisation
+    const department = await Department.findOne({ _id: targetDeptId, organisationId: req.user.organisationId });
     if (!department) {
-      return ResponseHandler.notFound(res, "Invalid Department Session");
+      return ResponseHandler.forbidden(res, "Invalid Department for your Organisation");
     }
 
-    // Check if ALL Faculties exist and belong to the same department
+    // Check if ALL Faculties exist and belong to the same organisation
     const faculties = await User.find({
       _id: { $in: value.facultyIds },
       role: ROLES.FACULTY,
-      departmentId: req.user.departmentId
+      organisationId: req.user.organisationId
     });
 
     if (faculties.length !== value.facultyIds.length) {
@@ -48,7 +53,7 @@ const create = async (req, res) => {
       name: value.name,
       semester: value.semester,
       faculties: value.facultyIds, // Store array
-      deptId: req.user.departmentId,
+      deptId: targetDeptId,
       isActive: true
     };
 
@@ -71,6 +76,11 @@ const getAll = async (req, res) => {
 
     if (req.user.role === ROLES.DEPT_ADMIN) {
       query.deptId = req.user.departmentId;
+    } else if (req.user.role === ROLES.ORG_ADMIN) {
+      // Find all departments in this organisation
+      const departments = await Department.find({ organisationId: req.user.organisationId }).select('_id');
+      const deptIds = departments.map(d => d._id);
+      query.deptId = { $in: deptIds };
     } else if (req.user.role === ROLES.FACULTY) {
       // Faculty sees subjects they are assigned to
       query.faculties = req.user.userId;
@@ -106,6 +116,14 @@ const getById = async (req, res) => {
       return ResponseHandler.forbidden(res, "Access denied");
     }
 
+    if (req.user.role === ROLES.ORG_ADMIN) {
+      // Verify department belongs to Org Admin's organisation
+      const dept = await Department.findById(subject.deptId._id);
+      if (dept.organisationId.toString() !== req.user.organisationId.toString()) {
+        return ResponseHandler.forbidden(res, "Access denied: Subject not in your Organisation");
+      }
+    }
+
     if (req.user.role === ROLES.FACULTY) {
       // Check if faculty is in the list
       const isAssigned = subject.faculties.some(f => f._id.toString() === req.user.userId.toString());
@@ -126,9 +144,9 @@ const getById = async (req, res) => {
 
 // UPDATE
 const update = async (req, res) => {
-  // Only DEPT_ADMIN
-  if (req.user.role !== ROLES.DEPT_ADMIN) {
-    return ResponseHandler.forbidden(res, "Only Dept Admins can update subjects");
+  // Allow DEPT_ADMIN and ORG_ADMIN
+  if (req.user.role !== ROLES.DEPT_ADMIN && req.user.role !== ROLES.ORG_ADMIN) {
+    return ResponseHandler.forbidden(res, "Only Admins can update subjects");
   }
 
   try {
@@ -142,7 +160,7 @@ const update = async (req, res) => {
       const faculties = await User.find({
         _id: { $in: req.body.facultyIds },
         role: ROLES.FACULTY,
-        departmentId: req.user.departmentId
+        organisationId: req.user.organisationId
       });
 
       if (faculties.length !== req.body.facultyIds.length) {
@@ -150,6 +168,17 @@ const update = async (req, res) => {
       }
       updateData.faculties = req.body.facultyIds;
       delete updateData.facultyIds; // Cleanup
+    }
+
+    const subjectBeforeUpdate = await Subject.findById(req.params.id).populate('deptId');
+    if (!subjectBeforeUpdate) return ResponseHandler.notFound(res, "Subject not found");
+
+    // Permission Check
+    if (req.user.role === ROLES.DEPT_ADMIN && subjectBeforeUpdate.deptId._id.toString() !== req.user.departmentId.toString()) {
+      return ResponseHandler.forbidden(res, "Access denied: Subject not in your Department");
+    }
+    if (req.user.role === ROLES.ORG_ADMIN && subjectBeforeUpdate.deptId.organisationId.toString() !== req.user.organisationId.toString()) {
+      return ResponseHandler.forbidden(res, "Access denied: Subject not in your Organisation");
     }
 
     const subject = await Subject.findByIdAndUpdate(req.params.id, updateData, {
@@ -171,18 +200,24 @@ const update = async (req, res) => {
 
 // DELETE (Soft Delete)
 const remove = async (req, res) => {
-  // Only DEPT_ADMIN
-  if (req.user.role !== ROLES.DEPT_ADMIN) {
-    return ResponseHandler.forbidden(res, "Only Dept Admins can delete subjects");
+  // Allow DEPT_ADMIN and ORG_ADMIN
+  if (req.user.role !== ROLES.DEPT_ADMIN && req.user.role !== ROLES.ORG_ADMIN) {
+    return ResponseHandler.forbidden(res, "Only Admins can delete subjects");
   }
 
   try {
+    const subjectCheck = await Subject.findById(req.params.id).populate('deptId');
+    if (!subjectCheck) return ResponseHandler.notFound(res, "Subject not found");
+
+    if (req.user.role === ROLES.DEPT_ADMIN && subjectCheck.deptId._id.toString() !== req.user.departmentId.toString()) {
+      return ResponseHandler.forbidden(res, "Access denied");
+    }
+    if (req.user.role === ROLES.ORG_ADMIN && subjectCheck.deptId.organisationId.toString() !== req.user.organisationId.toString()) {
+      return ResponseHandler.forbidden(res, "Access denied");
+    }
+
     // Soft Delete: Set isActive to false
     const subject = await Subject.findByIdAndUpdate(req.params.id, { isActive: false }, { new: true });
-
-    if (!subject) {
-      return ResponseHandler.notFound(res, "Subject not found");
-    }
     return ResponseHandler.success(res, null, "Subject archived successfully");
   } catch (err) {
     return ResponseHandler.error(res, err);
@@ -191,13 +226,21 @@ const remove = async (req, res) => {
 
 // DELETE ALL (Soft Delete All for Dept)
 const removeAll = async (req, res) => {
-  // Only DEPT_ADMIN
-  if (req.user.role !== ROLES.DEPT_ADMIN) {
-    return ResponseHandler.forbidden(res, "Only Dept Admins can delete subjects");
+  // Allow DEPT_ADMIN and ORG_ADMIN
+  if (req.user.role !== ROLES.DEPT_ADMIN && req.user.role !== ROLES.ORG_ADMIN) {
+    return ResponseHandler.forbidden(res, "Only Admins can delete subjects");
   }
 
   try {
-    await Subject.updateMany({ deptId: req.user.departmentId }, { isActive: false });
+    let query = { isActive: true };
+    if (req.user.role === ROLES.DEPT_ADMIN) {
+      query.deptId = req.user.departmentId;
+    } else if (req.user.role === ROLES.ORG_ADMIN) {
+      const departments = await Department.find({ organisationId: req.user.organisationId }).select('_id');
+      query.deptId = { $in: departments.map(d => d._id) };
+    }
+
+    await Subject.updateMany(query, { isActive: false });
     return ResponseHandler.success(res, null, "All subjects archived");
   } catch (err) {
     return ResponseHandler.error(res, err);

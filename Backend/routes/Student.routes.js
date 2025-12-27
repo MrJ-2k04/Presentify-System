@@ -12,6 +12,7 @@ router.use(authenticateUser);
 router.post('/', authorizeRoles(ROLES.DEPT_ADMIN), upload.array('images'), studentController.create);
 router.post('/promote', authorizeRoles(ROLES.DEPT_ADMIN), studentController.promoteStudents); // New Endpoint
 
+router.get('/options', studentController.getOptions);
 router.get('/', studentController.getAll);
 router.get('/:id', idValidator, studentController.getById);
 router.put('/:id', idValidator, authorizeRoles(ROLES.DEPT_ADMIN), studentController.update);
